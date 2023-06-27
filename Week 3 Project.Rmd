@@ -1,0 +1,107 @@
+---
+title: "NYPD Shooting Incidents - Week 3 Project"
+date: "2023-06-25"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Objective
+- To understand where the most shooting incidents occurred in NYC and identify trends over the years.
+  
+# Dataset Description
+NYPD Shooting Incident Data (Historic) is a dataset obtained from catalog.data.gov.
+The dataset contains 21 variables and 27,312 rows where each row represents a shooting incident record that occurred in NYC from 2006 through the end of 2022. The variables pertain to the location and time of event and demographics of the suspects and victims.
+```{r library, include=FALSE}
+library(tidyverse)
+```
+# Data processing
+## Import the data:
+```{r importData, message=FALSE}
+NYPD_df <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+```
+
+```{r summaryData}
+summary(NYPD_df)
+```
+
+## Tidy and Tansform Data
+```{r SelectData}
+NYPD_df1 <- NYPD_df %>%
+  select(OCCUR_DATE, BORO)  %>%
+  rename(Borough = BORO, Date = OCCUR_DATE)
+NYPD_df1
+```
+
+```{r DateType}
+NYPD_df1$Date <- as.Date(NYPD_df1$Date, format = "%m/%d/%Y")
+NYPD_df1
+```
+
+
+```{r YearCol}
+NYPD_df1$Year <- as.numeric(format(NYPD_df1$Date,'%Y'))
+```
+
+```{r IncidentCol}
+NYPD_df1$Incidents <- as.numeric(1)
+```
+
+```{r checkNull}
+NYPD_df1 %>% summarise_all(~ sum(is.na(.)))
+```
+Note: every record has a date and borough
+
+# Visualization
+```{r BarGraphBorough}
+Borough_BarGraph <- ggplot(NYPD_df1, aes(x = Borough)) +
+  geom_bar(fill="lightblue")+
+  labs(title = "Number of Shooting Incidents in NYC by Location", y="Number of Shooting Incidents")
+Borough_BarGraph
+```
+Note: Most shooting incidents occurred in Brooklyn and Bronx. Brooklyn is the only location with over 10,000 shooting incidents (~40%) from 2006 through 2020.
+
+```{r BrooklynDF}
+Brooklyn_df <- NYPD_df1 %>%
+  filter(Borough == "BROOKLYN") %>%
+  group_by(Year) %>%
+  summarise(Total_Incidents = sum(Incidents))
+``` 
+
+```{r LineGraphYear}
+ggplot(data=Brooklyn_df, aes(x=Year, y=Total_Incidents))+
+  geom_line(color = "blue")+
+  geom_point() +
+  geom_text(aes(label = round(Total_Incidents, 1)),
+            vjust = "inward", hjust = "inward",
+            show.legend = FALSE, size=3.1, color= "red") +
+  labs(title = "Number of Shooting Incidents in Brooklyn by Year", y="Number of Shooting Incidents", x="Year")
+```
+Note: As a whole, the number of shooting incidents was trending down from 2006 through 2019 which may be due to an increase in police officers/law enforcement and stricter public safety surveillance practices. However, the number of shooting incidents increased back up (by more than 2-fold) in 2020. This may be due to the result of COVID-19 pandemic causing the economy to decline, people to lose jobs, and  psychologically stress. 
+
+# Modeling
+
+```{r LinearModel}
+mod <- lm(Total_Incidents ~ Year, data = Brooklyn_df)
+summary(mod)
+```
+Note: The slope is -22 which means that as time goes on, the number of shooting incidents in Brooklyn is expected to decrease (P-value <0.05). However, we have high variations between the predicted and actual values given the large range in residuals. In addition, this model could only reliably explain less than 50% of variability in the data.
+
+```{r PredictorTable}
+Brooklyn_pred_df <- Brooklyn_df %>% mutate(pred=predict(mod))
+```
+
+```{r PredictorGraphComparison}
+Brooklyn_pred_df %>% ggplot()+
+  geom_point(aes(x= Year, y= Total_Incidents), color="blue")+
+  geom_point(aes(x= Year, y= pred), color="red")+
+  labs(title = "Shooting Incidents in Brooklyn by Year (Predicted-red vs Actual-blue)", y="Number of Shooting Incidents", x="Year")
+```
+
+# Discussion/Bias
+In conclusion, from a high-level exploratory analysis of the NYPD Shooting Incident Dataset, Brooklyn was found to have the highest number of shooting incidents (>40%). Although the number of shooting incidents was trending down over the years (2006-2019), there was a sharp increase in 2020. The linear model is not a good fit for this type of data because of the high variations and the number of shooting incidents is impacted by legislative, environmental, and social factors (e.g., economy, mental health, firearms policy) are not included in the dataset. In addition, the number of shooting incidents may be under reported because not every incident is reported to a law enforcement officer. There is potential that folks living in poverty do not have access to education and telephone line to report an incident or these folks may not feel compelled to report because they do not believe it will have an impact in their community.
